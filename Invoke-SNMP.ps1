@@ -28,17 +28,13 @@ Write-Host
 Write-Host
 
 $Banner = @'
-  ___                     _  __            ____   _   _  __  __  ____  
- |_ _| _ __ __   __ ___  | |/ / ___       / ___| | \ | ||  \/  ||  _ \ 
-  | | | '_ \\ \ / // _ \ | ' / / _ \ _____\___ \ |  \| || |\/| || |_) |
-  | | | | | |\ V /| (_) || . \|  __/|_____|___) || |\  || |  | ||  __/ 
- |___||_| |_| \_/  \___/ |_|\_\\___|      |____/ |_| \_||_|  |_||_|    
-                                                                                                                                                                                                                                          
+
+                    𝗜𝗻𝘃𝗼𝗸𝗲-𝗦𝗡𝗠𝗣
+            𝗵𝘁𝘁𝗽𝘀://𝗴𝗶𝘁𝗵𝘂𝗯.𝗰𝗼𝗺/𝘁𝗵𝗲-𝘃𝗶𝗽𝗲𝗿-𝗼𝗻𝗲
                                                                                                                        
 '@
 
-Write-Output $Banner
-Write-Output "Github : https://github.com/the-viper-one"
+Write-Output "$Banner"
 Write-Host
 Write-Host
 
@@ -312,7 +308,7 @@ do {
                 if ($result -eq "Unable to connect") {continue} 
                 
                 if ($result -ne "") {
-                   Display-ComputerStatus -ComputerName $($runspace.ComputerName) -OS $($runspace.OS) -statusColor Green -statusSymbol "[+] " -statusText "SUCCESS" -NameLength $NameLength -OSLength $OSLength
+                   Display-ComputerStatus -ComputerName $($runspace.ComputerName) -OS $($runspace.OS) -statusColor Green -statusSymbol "[+] " -NameLength $NameLength -OSLength $OSLength
                    $FoundResults = $True
             } 
 
@@ -330,8 +326,8 @@ Write-Host
 
 
 if ($FoundResults -eq $False){
-Write-Host "[-] " -ForegroundColor "Red" -NoNewline
-Write-Host "No hosts without authentication found"
+Write-Host "- " -ForegroundColor "Red" -NoNewline
+Write-Host "Unable to authenticate to any SNMP Hosts"
 Write-Host
 }
 
