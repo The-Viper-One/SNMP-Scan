@@ -18,8 +18,10 @@ Param(
     [Switch]$SuccessOnly,
 
     [Parameter(Mandatory=$False, Position=6, ValueFromPipeline=$true)]
-    [String]$Password = "public"
+    [String]$Community = "public"
 )
+
+$Password = $Community
 
 $startTime = Get-Date
 Set-Variable MaximumHistoryCount 32767
