@@ -10,10 +10,10 @@ IEX(New-Object System.Net.WebClient).DownloadString("https://raw.githubuserconte
 At minimum -Targets is required, otherwise SNMP-Scan supports optional parameters as shown below
 ```
 # Mandatory parameters
-SNMP-Scan -Targets DC01.security.local  # Specifc name or IP
-SNMP-Scan -Targets All                  # All enabled systems in Acitve Directory
-SNMP-Scan -Targets Servers              # All servers in Active Directory
-SNMP-Scan -Targets 10.10.10.0/24        # Scan an entire CIDR range
+SNMP-Scan -Targets DC01.security.local       # Specifc name or IP
+SNMP-Scan -Targets All                       # All enabled systems in Acitve Directory
+SNMP-Scan -Targets Servers                   # All servers in Active Directory
+SNMP-Scan -Targets 10.10.10.0/24             # Scan an entire CIDR range
 
 # Optional Parameters
 -Threads 10                                  # Specify number of threads to run (Default 40)
