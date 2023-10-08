@@ -49,25 +49,25 @@ function Get-IPRange {
     param (
         [string]$CIDR
     )
-    
+
     $ErrorActionPreference = "Stop"
     try {
         # Extract the base IP and subnet mask from the CIDR notation
         $baseIP, $prefixLength = $CIDR -split "/"
-        
+
         # Ensure the base IP and prefix length are valid
-        if(-not ($baseIP -match "^(\d{1,3}\.){3}\d{1,3}$") -or -not ($prefixLength -match "^\d+$")) {
+        if (-not ($baseIP -match "^(\d{1,3}\.){3}\d{1,3}$") -or -not ($prefixLength -match "^\d+$")) {
             throw "Invalid CIDR format. Ensure you use the format: xxx.xxx.xxx.xxx/yy"
         }
 
         # Calculate the number of IP addresses in the range
         $ipCount = [math]::Pow(2, (32 - [int]$prefixLength))
-        
+
         # Convert the base IP to a decimal number
         $ipBytes = [System.Net.IPAddress]::Parse($baseIP).GetAddressBytes()
         [Array]::Reverse($ipBytes)
         $ipDecimal = [BitConverter]::ToUInt32($ipBytes, 0)
-        
+
         # Generate all IP addresses within the range
         $ipAddresses = 0..($ipCount - 1) | ForEach-Object {
             $currentIPDecimal = $ipDecimal + $_
@@ -75,13 +75,13 @@ function Get-IPRange {
             [Array]::Reverse($currentIPBytes)
             "$($currentIPBytes[0]).$($currentIPBytes[1]).$($currentIPBytes[2]).$($currentIPBytes[3])"
         }
-        
+
         return $ipAddresses
-    }
-    catch {
+    } catch {
         Write-Error "An error occurred: $_"
     }
 }
+
 
 
 if ($Targets -match "^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$") {
@@ -161,26 +161,39 @@ $runspacePool.Open()
 $runspaces = New-Object System.Collections.ArrayList
 
 $scriptBlock = {
-    param ($ComputerName, $Password)
+    param ($ComputerName, $Password, $CIDRorIP)
+
+    if ($CIDRorIP -eq $True) {
+        $ping = New-Object System.Net.NetworkInformation.Ping
+        try {
+            $pingReply = $ping.Send($ComputerName, 50) # 50 ms timeout
+            if ($pingReply.Status -ne "Success") {
+                return "Port Closed"
+            }
+        }
+        catch {
+            return "Port Closed"
+        }
+    }
 
 function Test-UdpPort {
     param(
         [string]$ComputerName,
         [int]$Port = 161
     )
-    
+
     $udpClient = New-Object System.Net.Sockets.UdpClient
     $encoding = [System.Text.Encoding]::ASCII
-    $timeout = 50  # in milliseconds
-    
+    $timeout = 500  # in milliseconds
+
     Try {
         $udpClient.Connect($ComputerName, $Port)
         $udpClient.Client.ReceiveTimeout = $timeout
-        
+
         # Sending a message to probe the UDP port
         $bytes = $encoding.GetBytes("Test")
         $udpClient.Send($bytes, $bytes.Length) | Out-Null
-        
+
         # Wait for a possible response or ICMP unreachable message
         $udpClient.Receive([ref]$null)
     }
@@ -196,7 +209,7 @@ function Test-UdpPort {
             return "Port Open"
         }
         elseif ($_.Exception.GetType().Name -eq "SocketException") {
-            # Treat any SocketException as a potential indicator that port might be open
+            # Treat any SocketException as a potential indicator that the port might be open
             # Especially when ICMP messages are suppressed and we get a timeout (ErrorCode 10060)
             return "Port Open"
         }
@@ -207,17 +220,13 @@ function Test-UdpPort {
     Finally {
         $udpClient.Close()
     }
-    
+
     return "Port is closed"
 }
 
+
 Start-Sleep -Milliseconds 50 ; Test-UdpPort -ComputerName $ComputerName
 
-   
-   
-   
-   
-   
    
    function Get-SnmpValue {
     param (
@@ -251,63 +260,63 @@ return Get-SnmpValue -ComputerName $ComputerName -Password $Password
 
 
 
-if ($CIDRorIP -eq $True){
-function Get-FQDNDotNet {
-    param ([string]$IPAddress)
-    try {
-        $hostEntry = [System.Net.Dns]::GetHostEntry($IPAddress)
-        return $hostEntry.HostName
+if ($CIDRorIP -eq $True) {
+    function Get-FQDNDotNet {
+        param ([string]$IPAddress)
+        try {
+            $hostEntry = [System.Net.Dns]::GetHostEntry($IPAddress)
+            return $hostEntry.HostName
+        }
+        catch {}
     }
-    catch {}
+
+    function Display-ComputerStatus {
+        param (
+            [string]$ComputerName,
+            [string]$OS,
+            [System.ConsoleColor]$statusColor = 'White',
+            [string]$statusSymbol = "",
+            [string]$statusText = "",
+            [int]$NameLength,
+            [int]$OSLength
+        )
+
+        # Resolve the FQDN
+        $DnsName = Get-FQDNDotNet -IPAddress $ComputerName
+
+        # Prefix
+        Write-Host "SNMP " -ForegroundColor Yellow -NoNewline
+        Write-Host "   " -NoNewline
+        Write-Host ("{0,-16}" -f $ComputerName) -NoNewline
+        Write-Host "   " -NoNewline
+        # Display ComputerName and OS
+        Write-Host ("{0,20}" -f $DnsName) -NoNewline
+        Write-Host "   " -NoNewline
+
+        # Display status symbol and text
+        Write-Host $statusSymbol -ForegroundColor $statusColor -NoNewline
+        Write-Host $statusText
+    }
 }
 
-function Display-ComputerStatus {
-    param (
-        [string]$ComputerName,
-        [string]$OS,
-        [System.ConsoleColor]$statusColor = 'White',
-        [string]$statusSymbol = "",
-        [string]$statusText = "",
-        [int]$NameLength,
-        [int]$OSLength
-    )
 
-    # Resolve the FQDN
-    $DnsName = Get-FQDNDotNet -IPAddress $ComputerName
-    
-    # Prefix
-    Write-Host "SNMP " -ForegroundColor Yellow -NoNewline
-    Write-Host "   " -NoNewline
-    Write-Host ("{0,-16}" -f $ComputerName) -NoNewline
-    Write-Host "   " -NoNewline
-    # Display ComputerName and OS
-    Write-Host ("{0,20}" -f $DnsName) -NoNewline
-    Write-Host "   " -NoNewline
+if ($CIDRorIP -eq $False) {
+    function Display-ComputerStatus {
+        param (
+            [string]$ComputerName,
+            [string]$OS,
+            [System.ConsoleColor]$statusColor = 'White',
+            [string]$statusSymbol = "",
+            [string]$statusText = "",
+            [int]$NameLength,
+            [int]$OSLength
+        )
 
-    
-    # Display status symbol and text
-    Write-Host $statusSymbol -ForegroundColor $statusColor -NoNewline
-    Write-Host $statusText
-}
-}
+        # Prefix
+        Write-Host "SNMP " -ForegroundColor Yellow -NoNewline
+        Write-Host "   " -NoNewline
 
-if ($CIDRorIP -eq $False){
-function Display-ComputerStatus {
-    param (
-        [string]$ComputerName,
-        [string]$OS,
-        [System.ConsoleColor]$statusColor = 'White',
-        [string]$statusSymbol = "",
-        [string]$statusText = "",
-        [int]$NameLength,
-        [int]$OSLength
-    )
-
-    # Prefix
-    Write-Host "SNMP " -ForegroundColor Yellow -NoNewline
-    Write-Host "   " -NoNewline
-
-          # Attempt to resolve the IP address
+        # Attempt to resolve the IP address
         $IP = $null
         $Ping = New-Object System.Net.NetworkInformation.Ping 
         $Result = $Ping.Send($ComputerName, 10)
@@ -315,38 +324,37 @@ function Display-ComputerStatus {
         if ($Result.Status -eq 'Success') {
             $IP = $Result.Address.IPAddressToString
             Write-Host ("{0,-16}" -f $IP) -NoNewline
+        } else {
+            Write-Host ("{0,-16}" -f $IP) -NoNewline
         }
-    
-        else {Write-Host ("{0,-16}" -f $IP) -NoNewline}
-    
-    # Display ComputerName and OS
-    Write-Host ("{0,-$NameLength}" -f $ComputerName) -NoNewline
-    Write-Host "   " -NoNewline
-    Write-Host ("{0,-$OSLength}" -f $OS) -NoNewline
-    Write-Host "   " -NoNewline
 
-    # Display status symbol and text
-    Write-Host $statusSymbol -ForegroundColor $statusColor -NoNewline
-    Write-Host $statusText
+        # Display ComputerName and OS
+        Write-Host ("{0,-$NameLength}" -f $ComputerName) -NoNewline
+        Write-Host "   " -NoNewline
+        Write-Host ("{0,-$OSLength}" -f $OS) -NoNewline
+        Write-Host "   " -NoNewline
+
+        # Display status symbol and text
+        Write-Host $statusSymbol -ForegroundColor $statusColor -NoNewline
+        Write-Host $statusText
+    }
 }
-}
+
 
 
 
 # Create and invoke runspaces for each computer
 foreach ($computer in $computers) {
-
-
-    if ($CIDRorIP -eq $False){
-    $ComputerName = $computer.Properties["dnshostname"][0]
-    $OS = $computer.Properties["operatingSystem"][0]
+    if ($CIDRorIP -eq $False) {
+        $ComputerName = $computer.Properties["dnshostname"][0]
+        $OS = $computer.Properties["operatingSystem"][0]
     }
 
-    if ($CIDRorIP -eq $True){
-    $ComputerName = $Computer
+    if ($CIDRorIP -eq $True) {
+        $ComputerName = $Computer
     }
-    
-    $runspace = [powershell]::Create().AddScript($scriptBlock).AddArgument($ComputerName).AddArgument($Password)
+
+    $runspace = [powershell]::Create().AddScript($scriptBlock).AddArgument($ComputerName).AddArgument($Password).AddArgument($CIDRorIP)
     $runspace.RunspacePool = $runspacePool
 
     [void]$runspaces.Add([PSCustomObject]@{
@@ -355,8 +363,9 @@ foreach ($computer in $computers) {
         ComputerName = $ComputerName
         OS = $OS
         Completed = $false
-        })
+    })
 }
+
 
 
 
@@ -365,30 +374,23 @@ $FoundResults = $False
 # Poll the runspaces and display results as they complete
 do {
     foreach ($runspace in $runspaces | Where-Object { -not $_.Completed }) {
-        
+
         if ($runspace.Handle.IsCompleted) {
             $runspace.Completed = $true
             $result = $runspace.Runspace.EndInvoke($runspace.Handle)
 
-            if ($result -eq "Port Closed"){continue}
-            if ($result -eq "Host Unknown"){continue}
+            if ($result -eq "Port Closed") { continue }
+            if ($result -eq "Host Unknown") { continue }
 
-            if ($result -eq "Unable to connect") {Display-ComputerStatus -ComputerName $($runspace.ComputerName) -OS $($runspace.OS) -statusColor Red -statusSymbol "[-] " -NameLength $NameLength -OSLength $OSLength -statusText "Access Denied" ; continue} 
-                
+            if ($result -eq "Unable to connect") {
+                Display-ComputerStatus -ComputerName $($runspace.ComputerName) -OS $($runspace.OS) -statusColor Red -statusSymbol "[-] " -NameLength $NameLength -OSLength $OSLength -statusText "Access Denied"
+                continue
+            }
+
             if ($result -ne "") {
                 Display-ComputerStatus -ComputerName $($runspace.ComputerName) -OS $($runspace.OS) -statusColor Green -statusSymbol "[+] " -NameLength $NameLength -OSLength $OSLength -statusText Success
                 $FoundResults = $True
-                
-                # Dispose of all other runspaces for this computer
-                $runspaces | Where-Object {
-                    $_.ComputerName -eq $runspace.ComputerName -and -not $_.Completed
-                } | ForEach-Object {
-                    $_.Runspace.Dispose()
-                    $_.Handle.AsyncWaitHandle.Close()
-                    $_.Completed = $true
-                }
-                continue
-            } 
+            }
 
             # Dispose of runspace and close handle
             $runspace.Runspace.Dispose()
@@ -398,6 +400,7 @@ do {
 
     Start-Sleep -Milliseconds 100
 } while ($runspaces | Where-Object { -not $_.Completed })
+
 
 
 Write-Host
