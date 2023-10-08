@@ -16,10 +16,11 @@ SNMP-Scan -Targets Servers                   # All servers in Active Directory
 SNMP-Scan -Targets 10.10.10.0/24             # Scan an entire CIDR range
 
 # Optional Parameters
--Threads 10                                  # Specify number of threads to run (Default 40)
+-Community [Community String]                # Community string to use (Default: public)
+-Threads 10                                  # Specify number of threads to run (Default: 40)
 -SuccessOnly                                 # Show only successful results
--Domain                                      # Run against an alternate domain (Default is $env:userdnsdomain)
--Port                                        # Specify alternate port (Default is UDP 161)
+-Domain [Domain]                             # Run against an alternate domain (Default: $env:userdnsdomain)
+-Port [UDP Port]                             # Specify alternate port (Default: UDP 161)
 ```
 
 # Images
