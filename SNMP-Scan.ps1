@@ -9,7 +9,7 @@ Param(
     [String]$Domain = "$env:USERDNSDOMAIN",
 
     [Parameter(Mandatory=$False, Position=3, ValueFromPipeline=$true)]
-    [String]$Threads = "8",
+    [String]$Threads = "40",
 
     [Parameter(Mandatory=$False, Position=4, ValueFromPipeline=$true)]
     [int]$Port = "",
@@ -18,7 +18,7 @@ Param(
     [Switch]$SuccessOnly,
 
     [Parameter(Mandatory=$False, Position=6, ValueFromPipeline=$true)]
-    [String]$Password
+    [String]$Password = "public"
 )
 
 $startTime = Get-Date
@@ -152,6 +152,7 @@ $NameLength = ($computers | ForEach-Object { $_.Properties["dnshostname"][0].Len
 $OSLength = ($computers | ForEach-Object { $_.Properties["operatingSystem"][0].Length } | Measure-Object -Maximum).Maximum
 }
 
+
 # Create a runspace pool
 $runspacePool = [runspacefactory]::CreateRunspacePool(1, $Threads)
 $runspacePool.Open()
@@ -160,6 +161,62 @@ $runspaces = New-Object System.Collections.ArrayList
 $scriptBlock = {
     param ($ComputerName, $Password)
 
+function Test-UdpPort {
+    param(
+        [string]$ComputerName,
+        [int]$Port = 161
+    )
+    
+    $udpClient = New-Object System.Net.Sockets.UdpClient
+    $encoding = [System.Text.Encoding]::ASCII
+    $timeout = 50  # in milliseconds
+    
+    Try {
+        $udpClient.Connect($ComputerName, $Port)
+        $udpClient.Client.ReceiveTimeout = $timeout
+        
+        # Sending a message to probe the UDP port
+        $bytes = $encoding.GetBytes("Test")
+        $udpClient.Send($bytes, $bytes.Length) | Out-Null
+        
+        # Wait for a possible response or ICMP unreachable message
+        $udpClient.Receive([ref]$null)
+    }
+    Catch {
+        # Handling the exception based on timeout or other network issue
+        if ($_.Exception.Message -match "No such host is known") {
+            return "Host Unknown"
+        }
+        elseif ($_.Exception.Message -match "An existing connection was forcibly closed by the remote host") {
+            return "Port Closed"
+        }
+        elseif ($_.Exception.Message -match "A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond") {
+            return "Port Open"
+        }
+        elseif ($_.Exception.GetType().Name -eq "SocketException") {
+            # Treat any SocketException as a potential indicator that port might be open
+            # Especially when ICMP messages are suppressed and we get a timeout (ErrorCode 10060)
+            return "Port Open"
+        }
+        else {
+            return "Error: $($_.Exception.Message)"
+        }
+    }
+    Finally {
+        $udpClient.Close()
+    }
+    
+    return "Port is closed"
+}
+
+Start-Sleep -Milliseconds 50 ; Test-UdpPort -ComputerName $ComputerName
+
+   
+   
+   
+   
+   
+   
    function Get-SnmpValue {
     param (
         [string]$ComputerName,
@@ -273,6 +330,7 @@ function Display-ComputerStatus {
 }
 
 
+
 # Create and invoke runspaces for each computer
 foreach ($computer in $computers) {
 
@@ -298,6 +356,8 @@ foreach ($computer in $computers) {
         })
 }
 
+
+
 $FoundResults = $False
 
 # Poll the runspaces and display results as they complete
@@ -308,15 +368,27 @@ do {
             $runspace.Completed = $true
             $result = $runspace.Runspace.EndInvoke($runspace.Handle)
 
+            if ($result -eq "Port Closed"){continue}
+            if ($result -eq "Host Unknown"){continue}
 
-                if ($result -eq "Unable to connect") {continue} 
+            if ($result -eq "Unable to connect") {Display-ComputerStatus -ComputerName $($runspace.ComputerName) -OS $($runspace.OS) -statusColor Red -statusSymbol "[-] " -NameLength $NameLength -OSLength $OSLength -statusText "Access Denied" ; continue} 
                 
-                if ($result -ne "") {
-                   Display-ComputerStatus -ComputerName $($runspace.ComputerName) -OS $($runspace.OS) -statusColor Green -statusSymbol "[+] " -NameLength $NameLength -OSLength $OSLength
-                   $FoundResults = $True
+            if ($result -ne "") {
+                Display-ComputerStatus -ComputerName $($runspace.ComputerName) -OS $($runspace.OS) -statusColor Green -statusSymbol "[+] " -NameLength $NameLength -OSLength $OSLength -statusText Success
+                $FoundResults = $True
+                
+                # Dispose of all other runspaces for this computer
+                $runspaces | Where-Object {
+                    $_.ComputerName -eq $runspace.ComputerName -and -not $_.Completed
+                } | ForEach-Object {
+                    $_.Runspace.Dispose()
+                    $_.Handle.AsyncWaitHandle.Close()
+                    $_.Completed = $true
+                }
+                continue
             } 
 
-             # Dispose of runspace and close handle
+            # Dispose of runspace and close handle
             $runspace.Runspace.Dispose()
             $runspace.Handle.AsyncWaitHandle.Close()
         }
@@ -324,6 +396,7 @@ do {
 
     Start-Sleep -Milliseconds 100
 } while ($runspaces | Where-Object { -not $_.Completed })
+
 
 Write-Host
 Write-Host
